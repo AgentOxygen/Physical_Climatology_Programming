@@ -1,11 +1,11 @@
 """
 Orographic Lift Toy Model
 
-Primary Programmer: 
+Primary Programmers: 
     Cameron Cummins
+    Shokoufeh Khojeh
 Contributors: 
     Trevor Brooks
-    Shokoufeh Khojeh
     Sasanka Talukdar
     Constance Marshall
     Chieh-Chen Lee
