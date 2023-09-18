@@ -4,13 +4,14 @@ Orographic Lift Toy Model
 Primary Programmers: 
     Cameron Cummins
     Shokoufeh Khojeh
+    Sasanka Talukdar
+    
 Contributors: 
     Trevor Brooks
-    Sasanka Talukdar
     Constance Marshall
     Chieh-Chen Lee
 
-9/17/23
+9/18/23
 """
 import numpy as np
 import matplotlib.pyplot as plt
@@ -38,6 +39,7 @@ def calc_saturated_vapor_pressure(T: float) -> float:
     Keyword arguments:
     T -- temperature of air parcel in Kelvins
     """
+
     return 6.11 * np.exp(5423*((1/273.15) - (1/T)))
 
 
@@ -177,13 +179,33 @@ def altitude_function(x: float, peak_x=0, peak_height=3000, base_width=1000) -> 
     return 0
 
 
+def calc_dewpoint_temperature(es: float, Tf=273.15, Rv=461.5):
+    return 1 / ((1/Tf) - ((1/6.11)*(es/np.exp(1/Rv))))
+
+    
+def output_to_table(dataset: dict, file_name: str):
+    with open(file_name, "w") as f:
+        columns = [key for key in dataset.keys()]
+        length = dataset[columns[0]].size
+        
+        first_row = ""
+        for variable in columns:
+            first_row += f"{variable},"
+        f.write(first_row[:-1] + "\n")
+        
+        for index in range(length):
+            row = ""
+            for variable in columns:
+                row += f"{dataset[variable][index]},"
+            f.write(row[:-1] + "\n")
+
 if __name__ == '__main__':
     # Initial conditions @ x_initial
-    x_coords = np.arange(-1000, 1010, 10)
+    x_coords = np.arange(-1000, 1010, 0.3)
     z_coords = np.zeros(x_coords.shape)
 
     temperatures = np.zeros(x_coords.shape)
-    #dewpoint_temperatures = np.zeros(x_coords.shape)
+    dewpoint_temperatures = np.zeros(x_coords.shape)
     pressures = np.zeros(x_coords.shape)
     specific_humidities = np.zeros(x_coords.shape)
     relative_humidities = np.zeros(x_coords.shape)
@@ -197,6 +219,7 @@ if __name__ == '__main__':
     specific_humidities[0] = 0.01
     vapor_pressures[0] = calc_vapor_pressure(specific_humidities[0], pressures[0])
     relative_humidities[0] = vapor_pressures[0] / calc_saturated_vapor_pressure(temperatures[0])
+    dewpoint_temperatures[0] = calc_dewpoint_temperature(calc_saturated_vapor_pressure(temperatures[0]))
     potential_temperatures[0] = calc_potential_temperature(pressures[0], pressures[0], temperatures[0])
     z_coords[0] = altitude_function(x_coords[0])
     lapse_rates[0] = calc_dry_lapse_rate()
@@ -256,7 +279,10 @@ if __name__ == '__main__':
         relative_humidities[index] = calc_vapor_pressure(specific_humidity, pressure) / calc_saturated_vapor_pressure(temperature)
 
         # Update potential temperature
-        potential_temperatures[index] = calc_potential_temperature(pressure, pressures[index], temperature)
+        potential_temperatures[index] = calc_potential_temperature(pressures[0], pressure, temperature)
+        
+        # Update dewpoint temperature
+        dewpoint_temperatures[index] = calc_dewpoint_temperature(saturated_vapor_pressure)
 
     # =================================== Plotting ===================================
 
@@ -318,3 +344,17 @@ if __name__ == '__main__':
     ax6.grid()
 
     f.savefig("Simulation_Output.png")
+    
+    # Save to table
+    dataset = {
+        "altitude (m)": z_coords,
+        "temperature": temperatures - 273.15,
+        "dewpoint_temperature": dewpoint_temperatures - 273.15,
+        "pressure (hPa)": pressures,
+        "specific_humidity (g/Kg)": specific_humidities*1000,
+        "relative_humidity (%)": relative_humidities,
+        "potential_temperature (K)": potential_temperatures,
+        "vapor_pressure (hPa)": vapor_pressures
+    }
+    
+    output_to_table(dataset, "sim_output.csv")
