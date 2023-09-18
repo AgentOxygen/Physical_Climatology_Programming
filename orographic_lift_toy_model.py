@@ -75,7 +75,8 @@ def calc_specific_humidity(e: float, p: float) -> float:
     return 0.622*e / (p - 0.378*e)
 
 
-def calc_pressure(tv: float, p: float, dz: float, g=9.81, R=287.05):
+# Deprecated
+def calc_dyn_pressure(tv: float, p: float, dz: float, g=9.81, R=287.05):
     """
     Computes pressure of air parcel in hPa
     
@@ -90,6 +91,21 @@ def calc_pressure(tv: float, p: float, dz: float, g=9.81, R=287.05):
     
     return p / exponential_term
 
+
+def calc_pressure(z: float, p0s: float, T0s: float, env_lapse_rate=-0.0065, g=-9.81, R=287.05):
+    """
+    Computes pressure of air parcel in hPa based purely on altitude and initial pressure
+    
+    Keyword arguments:
+    z -- altitude of air parcel in meters
+    p0s -- initial pressure from surface in hPa
+    T0s -- initial temperature from surface in Kelvins
+    env_lapse_rate -- environmental lapse rate in Kelvins per meter (default -0.0065)
+    g -- graviational constant (default -9.81)
+    R -- gas constant for dry air (default 287.05)
+    """
+    return p0s*((z*env_lapse_rate/T0s) + 1)**(g/(R*env_lapse_rate))
+    
 
 def calc_virtual_temperature(t: float, p: float, pv: float, epsilon=0.622) -> float:
     """
@@ -170,7 +186,9 @@ if __name__ == '__main__':
     relative_humidities = np.zeros(x_coords.shape)
     potential_temperatures = np.zeros(x_coords.shape)
     vapor_pressures = np.zeros(x_coords.shape)
-
+    saturated_vapor_pressures = np.zeros(x_coords.shape)
+    lapse_rates = np.zeros(x_coords.shape)
+    
     temperatures[0] = 20 + 273.15
     pressures[0] = 1000
     specific_humidities[0] = 0.01
@@ -178,7 +196,11 @@ if __name__ == '__main__':
     relative_humidities[0] = vapor_pressures[0] / calc_saturated_vapor_pressure(temperatures[0])
     potential_temperatures[0] = calc_potential_temperature(pressures[0], pressures[0], temperatures[0])
     z_coords[0] = altitude_function(x_coords[0])
-
+    lapse_rates[0] = calc_dry_lapse_rate()
+    
+    # this is to temporarily fix the error associated with computing saturated vapor pressure
+    fix_lapse_rate = False
+    
     # Run toy model
     for index in range(1, x_coords.shape[0]):
         # Get state
@@ -186,38 +208,47 @@ if __name__ == '__main__':
         pressure = pressures[index-1]
         specific_humidity = specific_humidities[index-1]
         vapor_pressure = vapor_pressures[index-1]
-
+        
         # Compute derivative variables
         saturated_vapor_pressure = calc_saturated_vapor_pressure(temperature)
         latent_heat = calc_latent_heat_vaporization(temperature)
         lapse_rate = calc_dry_lapse_rate()
         mixing_ratio = calc_mixing_ratio(specific_humidity)
-
+        
         # Impose constraint
         specific_humidities[index] = specific_humidities[index-1]
-        if vapor_pressure > saturated_vapor_pressure:
+        if vapor_pressure >= saturated_vapor_pressure:
+            fix_lapse_rate = True
+        if z_delta < 0:
+            fix_lapse_rate = False
+            
+        if fix_lapse_rate:
             vapor_pressure = saturated_vapor_pressure
-
+            
             # Modify lapse rate
             lapse_rate = lapse_rate*calc_wet_lapse_rate_coeff(mixing_ratio, latent_heat)
-
+            
             # Compute new specific humidity
             specific_humidities[index] = calc_specific_humidity(vapor_pressure, pressure)
-
+            
+        # Update lapse rate
+        lapse_rates[index] = lapse_rate
+        
         # Update vapor pressure
         vapor_pressures[index] = calc_vapor_pressure(specific_humidity, pressure)
-
+        
         # Update altitude
         z_coords[index] = altitude_function(x_coords[index])
         z_delta = z_coords[index] - z_coords[index-1]
 
         # Update temperature
         temperatures[index] = temperature + lapse_rate*z_delta
-
+        
         # Update pressure
         virtual_temperature = calc_virtual_temperature(temperature, pressure, vapor_pressure)
-        pressures[index] = calc_pressure(virtual_temperature, pressure, z_delta)
-
+        #pressures[index] = calc_pressure(virtual_temperature, pressure, z_delta)
+        pressures[index] = calc_pressure(z_coords[index], pressures[0], temperatures[0])
+        
         # Update relative humidity
         relative_humidities[index] = calc_vapor_pressure(specific_humidity, pressure) / calc_saturated_vapor_pressure(temperature)
 
@@ -236,9 +267,12 @@ if __name__ == '__main__':
     ax2.plot(x_coords, pressures, color="Red", label="Pressure")
     ax3.plot(x_coords, specific_humidities, color="Red", label="Specific Humidity")
     ax4.plot(x_coords, relative_humidities*100, color="Red", label="Relative Humidity")
-    ax5.plot(x_coords, vapor_pressures, color="Red", label="Altitude")
+    ax5.plot(x_coords, vapor_pressures, color="Red", label="Vapor Pressure")
     ax6.plot(x_coords, z_coords, color="Red", label="Altitude")
-
+    ax6.plot(x_coords[0], z_coords[0], color="Blue", label="Lapse Rate")
+    ax66 = ax6.twinx()
+    ax66.plot(x_coords, lapse_rates*1000, color="Blue")
+    
     title_s = 20
     label_s = 12
     legend_s = 15
@@ -256,6 +290,7 @@ if __name__ == '__main__':
     ax4.set_ylabel("Relative Humidity (%)", fontsize=label_s)
     ax5.set_ylabel("Vapor Pressure (hPa)", fontsize=label_s)
     ax6.set_ylabel("Altitude (m)", fontsize=label_s)
+    ax66.set_ylabel("Lapse Rate (K/km)")
 
     ax1.set_xlabel("Horizontal Distance to Peak (m)", fontsize=label_s)
     ax2.set_xlabel("Horizontal Distance to Peak (m)", fontsize=label_s)
@@ -263,7 +298,7 @@ if __name__ == '__main__':
     ax4.set_xlabel("Horizontal Distance to Peak (m)", fontsize=label_s)
     ax5.set_xlabel("Horizontal Distance to Peak (m)", fontsize=label_s)
     ax6.set_xlabel("Horizontal Distance to Peak (m)", fontsize=label_s)
-
+    
     ax1.legend(fontsize=legend_s)
     ax2.legend(fontsize=legend_s)
     ax3.legend(fontsize=legend_s)
