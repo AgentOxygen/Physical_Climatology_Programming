@@ -12,7 +12,6 @@ Contributors:
 
 9/17/23
 """
-
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -50,7 +49,7 @@ def calc_latent_heat_vaporization(T: float):
     Keyword arguments:
     T -- temperature of air parcel in Kelvins
     """
-    return 2.5*(10**6) - T * (2.5*(10**6) - 2.25*(10**6)) / 100
+    return 2.5*(10**6) + T * (2.25*(10**6) - 2.5*(10**6)) / 100
 
 
 def calc_vapor_pressure(q: float, p: float) -> float:
@@ -132,16 +131,19 @@ def calc_dry_lapse_rate(g=9.81, cp=1000) -> float:
     return -1*(g/cp)
 
 
-def calc_wet_lapse_rate_coeff(w: float, l: float, cp=1000) -> float:
+def calc_wet_lapse_rate_coeff(T: float, q: float, l: float, Rv=461.5, cp=1000) -> float:
     """
     Computes the coefficient to multiply the adiabatic lapse rate for a dry parcel of air by
     
     Keyword arguments:
-    w -- mixing ratio, dimensionless
+    T -- temperature of air parcel in Kelvins
+    q -- specific humidity of air parcel in kg/kg
     l -- latent heat of condensation in Joules per kilogram
+    Rv -- gas constant for water vapor (default 461.5)
     cp -- heat capacity of dry air (default 1000)
     """
-    return 1 / (1 + (l/cp)*w)
+    dqdt = q * l / (Rv * T**2)
+    return 1 / (1 + (l/cp)*dqdt)
 
 
 def calc_mixing_ratio(q: float) -> float:
@@ -181,6 +183,7 @@ if __name__ == '__main__':
     z_coords = np.zeros(x_coords.shape)
 
     temperatures = np.zeros(x_coords.shape)
+    #dewpoint_temperatures = np.zeros(x_coords.shape)
     pressures = np.zeros(x_coords.shape)
     specific_humidities = np.zeros(x_coords.shape)
     relative_humidities = np.zeros(x_coords.shape)
@@ -226,7 +229,7 @@ if __name__ == '__main__':
             vapor_pressure = saturated_vapor_pressure
             
             # Modify lapse rate
-            lapse_rate = lapse_rate*calc_wet_lapse_rate_coeff(mixing_ratio, latent_heat)
+            lapse_rate = lapse_rate*calc_wet_lapse_rate_coeff(temperature, specific_humidity, latent_heat)
             
             # Compute new specific humidity
             specific_humidities[index] = calc_specific_humidity(vapor_pressure, pressure)
@@ -271,7 +274,8 @@ if __name__ == '__main__':
     ax6.plot(x_coords, z_coords, color="Red", label="Altitude")
     ax6.plot(x_coords[0], z_coords[0], color="Blue", label="Lapse Rate")
     ax66 = ax6.twinx()
-    ax66.plot(x_coords, lapse_rates*1000, color="Blue")
+    ax66.plot(x_coords, lapse_rates*-1000, color="Blue")
+    ax66.set_ylim(0, 10)
     
     title_s = 20
     label_s = 12
@@ -282,7 +286,7 @@ if __name__ == '__main__':
     ax3.set_title("Specific Humidity", fontsize=title_s)
     ax4.set_title("Relative Humidity", fontsize=title_s)
     ax5.set_title("Vapor Pressure", fontsize=title_s)
-    ax6.set_title("Altitude", fontsize=title_s)
+    ax6.set_title("Altitude and Lapse Rate", fontsize=title_s)
 
     ax1.set_ylabel("Temperature (°C)", fontsize=label_s)
     ax2.set_ylabel("Pressure (hPa)", fontsize=label_s)
