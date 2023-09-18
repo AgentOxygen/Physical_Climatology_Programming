@@ -11,7 +11,7 @@ Contributors:
     Constance Marshall
     Chieh-Chen Lee
 
-9/18/23
+9/17/23
 """
 import numpy as np
 import matplotlib.pyplot as plt
@@ -180,6 +180,14 @@ def altitude_function(x: float, peak_x=0, peak_height=3000, base_width=1000) -> 
 
 
 def calc_dewpoint_temperature(es: float, Tf=273.15, Rv=461.5):
+    """
+    Returns dewpoint temperature at specified saturation vapor pressure
+    
+    Keyword arguments:
+    es -- saturation vapor pressure in hPa
+    Tf -- freezing point of water (default 273.15)
+    Rv -- gas constant for water vapor (default 461.5)
+    """
     return 1 / ((1/Tf) - ((1/6.11)*(es/np.exp(1/Rv))))
 
     
